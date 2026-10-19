@@ -1,6 +1,7 @@
 import type { WorkStateEntry, WorkStateFields, WorkStateValue } from '../../sqlite/work-state.js';
 import { describeDuration } from '../../../shared/observer-health.js';
 import { relativeTimePlaceholder } from '../../../shared/context-cache.js';
+import { isOwnerGoalsList } from '../../work-view/owner-goals.mjs';
 
 /**
  * When "updated N ago" is measured from: an epoch, or 'placeholders' to leave
@@ -138,7 +139,8 @@ export function buildWorkStateContextSection(
   nowEpoch: WorkStateClock,
   characterLimit: number = WORK_STATE_SECTION_CHARACTER_LIMIT,
 ): string {
-  const openLines = renderWorkStateLines(entries, nowEpoch);
+  // Goals lists (owner-goals and its past months) show in My Work; their quotes would fill this section.
+  const openLines = renderWorkStateLines(entries.filter(entry => !isOwnerGoalsList(entry.list_name)), nowEpoch);
   if (openLines.length === 0) {
     return `${WORK_STATE_RULE}\n\nNothing open yet.`;
   }

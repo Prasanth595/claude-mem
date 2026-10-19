@@ -1,12 +1,12 @@
 import { setupTeamView } from './team-view.js';
 import { relativeTime, requestElapsed } from './view-model.js';
 import { presentWork, effectiveStatus, statusCategory, contentSignature, handoffText, scopeWork, sortWork } from './presentation.js';
-import { personalRoute, parsePersonalRoute, requestCards, requestList, agentCards, requestPage, workstreamPage } from './request-views.js';
+import { personalRoute, parsePersonalRoute, requestCards, requestList, agentCards, requestPage, workstreamPage, goalsPanel } from './request-views.js';
 import { getConnectionStatus } from './live-status.js';
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const state = { rows: [], unlinked: [], loaded: false, failed: false, snapshot: null, filter: 'all', query: '', range: 'day', project: '', sort: 'attention', view: 'cards', from: 'cards', requestId: null, workId: null, agentId: null, pending: null, signature: '', lastReceived: 0, sourceConnected: false, changed: new Set(), unread: new Set(), previousCounts: {}, busy: false, toastTimer: null };
+const state = { rows: [], unlinked: [], loaded: false, failed: false, snapshot: null, filter: 'all', query: '', range: 'day', project: '', sort: 'attention', goalsMonth: '', view: 'cards', from: 'cards', requestId: null, workId: null, agentId: null, pending: null, signature: '', lastReceived: 0, sourceConnected: false, changed: new Set(), unread: new Set(), previousCounts: {}, busy: false, toastTimer: null };
 const connection = { transportConnected: false, reconnecting: false, lastEventAt: null, sourceConnected: null, lastSuccessfulCheckAt: null, lastSuccessfulCheckReceivedAt: null };
 const labels = { all: 'All', needs: 'Needs you', working: 'In progress', quiet: 'No recent update', ready: 'Ready to check', checked: 'Checked', blocked: 'Blocked', todo: 'To do', unknown: 'Update recorded', closed: 'Closed', other: 'Other states' };
 const rowById = id => state.rows.find(row => row.id === id);
@@ -20,6 +20,7 @@ function scopedRows() {
 function visibleRows() { return sortWork(scopedRows().filter(row => state.filter === 'all' || (state.filter === 'other' ? statusCategory(row) === 'other' : effectiveStatus(row) === state.filter)), state.sort); }
 function render() {
   const open = new Set([...document.querySelectorAll('details[open]')].map(element => element.dataset.updates));
+  const openGoals = new Set([...document.querySelectorAll('details[open][data-goal]')].map(element => element.dataset.goal));
   const projects = [...new Set(state.rows.flatMap(row => row.projects?.length ? row.projects : [row.project]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   if (state.project && !projects.includes(state.project)) state.project = '';
   $('project-filter').hidden = false;
@@ -41,6 +42,10 @@ function render() {
   const detail = state.view === 'request';
   $('work-heading').parentElement.hidden = detail;
   $('personal-heading').hidden = detail;
+  const goals = goalsPanel(state.snapshot?.goals, { history: state.snapshot?.goalHistory, selected: state.goalsMonth });
+  $('goals').hidden = detail || !goals;
+  if (!detail) $('goals').innerHTML = goals;
+  for (const element of $('goals').querySelectorAll('details[data-goal]')) if (openGoals.has(element.dataset.goal)) element.open = true;
   $('personal-toolbar').hidden = detail;
   $('status-tabs').hidden = detail;
   $('unlinked-work').hidden = detail || !state.unlinked.length;
@@ -205,6 +210,7 @@ document.addEventListener('click', async event => {
   const target = event.target.closest('button'); if (!target) return;
   if (target.dataset.view) { navigate(personalRoute(target.dataset.view, { ...state, requestId: null, workId: null, agentId: null, from: null })); return; }
   if (target.dataset.filter) { state.filter = target.dataset.filter; saveScope(); render(); [...document.querySelectorAll('[data-filter]')].find(button => button.dataset.filter === state.filter)?.focus({ preventScroll: true }); }
+  if (target.dataset.goalsMonth) { const label = target.getAttribute('aria-label'); state.goalsMonth = target.dataset.goalsMonth; render(); const again = $('goals').querySelector(`.goals-step[aria-label="${label}"]`); (again && !again.disabled ? again : $('goals-month'))?.focus({ preventScroll: true }); }
   if (target.dataset.review) openReview(target.dataset.review);
   if (target.dataset.detail) openDetail(target.dataset.detail);
   if (target.dataset.copyHandoff) {
@@ -230,6 +236,7 @@ document.addEventListener('click', async event => {
     catch { pre.textContent = 'This source record is no longer available.'; }
   }
 });
+document.addEventListener('change', event => { if (event.target.id === 'goals-month') { state.goalsMonth = event.target.value; render(); $('goals-month')?.focus({ preventScroll: true }); } });
 document.addEventListener('toggle', event => { if (event.target.matches('details[open][data-updates]')) markRead(event.target.dataset.updates); }, true);
 $('search').addEventListener('input', event => { state.query = event.target.value.trim().toLowerCase(); saveScope(); render(); });
 $('time-range').addEventListener('change', event => { state.range = event.target.value; saveScope(); render(); });
